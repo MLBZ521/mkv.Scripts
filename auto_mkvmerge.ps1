@@ -2,27 +2,27 @@
 
 Script Name:  auto_mkvmerge.ps1
 By:  Zack Thompson / Created:  3/19/2017
-Version: 0.5.1 / Updated:  3/22/2017 / By:  ZT
+Version: 0.6 / Updated:  3/25/2017 / By:  ZT
 
 Description:  This script will allow for batch processing of files with the mkvmerge.exe tool.
 
-*Note:  This script uses and assumes the mkvmerge and mkvinfo tools have their directory in your PATH enviroment variable.
-
-Note:  This script is 'working' as desired, but by no means is finished -- more to come.
+Notes:
+    * This script uses and assumes the mkvmerge and mkvinfo tools have their directory in your PATH enviroment variable.
+    * This script is 'working' as desired, but by no means is finished -- more to come.
 
 To do:
- - Add logic for folder structure (currently script only works in current working directory)
- - Add logging capabilities
- - Output original track list to CSV log
- - If you don't want to delete the files upon completion, dump file list to file for use later
- - Adjust script to take values as arguments, or convert to a function.
+ DONE = Add logic for folder structure (currently script only works in current working directory)
+ + Add logging capabilities
+ + Output original track list to CSV log
+ + If you don't want to delete the files upon completion, dump file list to file for use later
+ + Adjust script to take values as arguments, or convert to a function.
 
 #>
 
-Write-Host "This script will allow for batch processing of files with the mkvmerge.exe tool."
+Write-Host "This script will allow for batch processing of files with the mkvmerge.exe tool." -ForegroundColor Green
 
 # ============================================================
-# These function are all questions asked during the processing of the script.
+# These functions are all questions asked during the processing of the script.
 Function Question1 {
 	$Title = "Do you want to continue?";
 	$Message = "Do you want to continue?  Enter ? for more information on the options."
@@ -74,21 +74,23 @@ $Trims.'Language: ' = ''
 $Trims."$($LineFeed)" = ','
 
 # Request location of files to scan.
-# $Location = Read-Host "Please provide location to scan for files"
-Set-Location "M:\Library\TV\Silicon Valley\Season 1\test"  # This is for dev work.
+Write-Host "Please provide location to scan for files:  " -ForegroundColor Yellow -NoNewline
+$Location = Read-Host
+#$Location = "M:\Library\TV\Silicon Valley\Season 1\test"  # This is for development.
 
 # ============================================================
 # Script Body
 # ============================================================
 
 # Get all mkvs info from provided location
-$mkvs = Get-ChildItem *.mkv | Select Name, Directory  # This is for dev work.
-# $mkvs = Get-ChildItem *.mkv -Directory $Location | Select Name, Directory
+$mkvs = Get-ChildItem -Filter *.mkv -Path $Location -Recurse | Select Name, Directory, FullName
+
+$mkvObject = @()  # For Testing
 
 ForEach ($mkv in $mkvs) {
 
     # Get data from mkvs with mkvinfo.exe.
-    $mkvInfo = cmd /c mkvinfo.exe $mkv.Name | Where-Object -FilterScript { ($_ -like '*Track number*') -or ($_ -like '*Track type*') -or ($_ -like '*Language*') -and ($_ -notlike '*Chapter*') } | Out-String
+    $mkvInfo = cmd /c mkvinfo.exe $mkv.FullName | Where-Object -FilterScript { ($_ -like '*Track number*') -or ($_ -like '*Track type*') -or ($_ -like '*Language*') -and ($_ -notlike '*Chapter*') } | Out-String
 
     # Trim the data to a more usable format.
     ForEach ($Key in $Trims.Keys) {
@@ -112,6 +114,7 @@ ForEach ($mkv in $mkvs) {
             Track = $mkvData[0].TrimEnd()
             Type = $mkvData[1].TrimEnd()
             Language = $mkvData[2].TrimEnd()
+            Directory = $mkv.Directory
         }
 
         # Add hash table to custom object
@@ -121,7 +124,7 @@ ForEach ($mkv in $mkvs) {
 }
 
 # Display results to screen for review
-Write-Host "All tracks for provided files, please review before continuing..."
+Write-Host "All tracks for provided files, please review before continuing..." -ForegroundColor Cyan
 $mkvObject | Select-Object Track, Type, Language, Name |  FT
 
 # Function Question1
@@ -143,12 +146,13 @@ If ($Answer1 -eq 0) {
     $mkvItems = $mkvRemove | Group-Object -Property Name
 
     If ($mkvItems.Count -lt '1') {
-        Write-Host "Nothing to edit in provided directory!"
+        Write-Host "Nothing to edit in provided directory!" -ForegroundColor Magenta
         Exit
     }
     Else {
-        Write-Host "The following number of tracks were found per file.  These will be removed:  (Last point to turn back!)"
+        Write-Host "The following number of tracks were found per file.  These tracks will be removed:" -ForegroundColor Cyan
         $mkvItems | Select-Object Count, Name | FT -AutoSize
+        Write-Host "(Last point to turn back!)" -ForegroundColor Red
     }
 }
 
@@ -158,9 +162,8 @@ Question2
 If ($Answer2 -eq 0) {
 
     # Performing the changes...
-    Write-Host "No turning back now..."
-    Write-Host "No worries, no changes to the original files will be made yet!  :)"
-    Write-Host " "
+    Write-Host "No turning back now..." -ForegroundColor Cyan
+    Write-Host "No worries, no changes to the original files will be made yet!  xD" -ForegroundColor Cyan
 
     # Define Array
     $DeleteOrig = @()
@@ -174,27 +177,27 @@ If ($Answer2 -eq 0) {
         $mkvSubtitles = ($mkvItem.Group | Where-Object { $_.Type -eq "subtitles" } | Select-Object -ExpandProperty Track) -join ','
 
         # Define Input and Output file names.
-        $InputFile = $mkvItem.Name
-        $OutputFile = "new_" + $mkvItem.Name
+        $InputFile = "$($mkvItem.Group | Select-Object Directory -Unique -ExpandProperty Directory)\$($mkvItem.Name)"
+        $OutputFile = "$($mkvItem.Group | Select-Object Directory -Unique -ExpandProperty Directory)\new_$($mkvItem.Name)"
 
         # Perform mkvmerge on file.
-        #Write-Host "mkvmerge.exe --output $OutputFile --audio-tracks $($Delete)$($mkvAudios) --subtitle-tracks $($Delete)$($mkvSubtitles) $InputFile"   # This is for dev work.
+#        Write-Host "mkvmerge.exe --output $OutputFile --audio-tracks $($Delete)$($mkvAudios) --subtitle-tracks $($Delete)$($mkvSubtitles) $InputFile"   # This is for development.
         mkvmerge.exe --output $OutputFile --audio-tracks "$($Delete)$($mkvAudios)" --subtitle-tracks "$($Delete)$($mkvSubtitles)" $InputFile
 
         # Perform mkvpropedit on file.
-        #Write-Host "mkvpropedit.exe $OutputFile --delete title"   # This is for dev work.
+#        Write-Host "mkvpropedit.exe $OutputFile --delete title"   # This is for development.
         mkvpropedit.exe $OutputFile --delete title
  
         # Label original as such.
         Rename-Item $InputFile -NewName "orig_$($InputFile)"
-        $DeleteOrig += "orig_$($InputFile)"
+        $DeleteOrig += "$($mkvItem.Group | Select-Object Directory -Unique -ExpandProperty Directory)\orig_$($mkvItem.Name)"
 
         # Rename 'new' as 'production.'
         Rename-Item $OutputFile -NewName $InputFile
     }
 }
 
-Write-Host "Here are the original files, do you want to nuke these?"
+Write-Host "Here are the original files, do you want to nuke these?" -ForegroundColor Red
 $DeleteOrig
 
 # Function Question3
