@@ -2,7 +2,7 @@
 
 Script Name:  auto_mkvmerge.ps1
 By:  Zack Thompson / Created:  3/19/2017
-Version: 0.8 / Updated:  4/7/2017 / By:  ZT
+Version: 0.8.1 / Updated:  4/7/2017 / By:  ZT
 
 Description:  This script will allow for batch processing of files with the mkvmerge.exe toolset.
 
@@ -37,7 +37,7 @@ Function Question0 {
 }
 
 Function Question1 {
-	$Title = "Do you want to continue?";
+	$Title = "Continue?";
 	$Message = "Do you want to continue?  Enter ? for more information on the options."
 	$Yes = New-Object System.Management.Automation.Host.ChoiceDescription "&Yes","Continue on this path of automation...";
 	$No = New-Object System.Management.Automation.Host.ChoiceDescription "&No","Quick, exit and never look back!";
@@ -46,7 +46,7 @@ Function Question1 {
 }
 
 Function Question2 {
-	$Title = "Are you sure you want to make the changes above?";
+	$Title = "Commit the changes above?";
 	$Message = "Are you sure you want to make the changes above?  Enter ? for more information on the options."
 	$Yes = New-Object System.Management.Automation.Host.ChoiceDescription "&Yes","Greatness awaits you!";
 	$No = New-Object System.Management.Automation.Host.ChoiceDescription "&No","You will never know what could have been!";
@@ -55,8 +55,8 @@ Function Question2 {
 }
 
 Function Question3 {
-	$Title = "Do you want to delete the original files?";
-	$Message = "Do you want to delete the original files?  Enter ? for more information on the options."
+	$Title = "Delete original files?";
+	$Message = "Do you want to delete the original files after mkvmerge completes?  Enter ? for more information on the options."
 	$Yes = New-Object System.Management.Automation.Host.ChoiceDescription "&Yes","Poof!  No recovery from here!";
 	$No = New-Object System.Management.Automation.Host.ChoiceDescription "&No","This is the last turning back point!";
     $Options = [System.Management.Automation.Host.ChoiceDescription[]]($Yes,$No);
@@ -219,6 +219,9 @@ If ($Answer1 -eq 0) {
 # Function Question2
 Question2
 
+# Function Question3 -- Moved the order of this question so that the script completes without waiting after the possible long mkvmerge run.
+Question3
+
 If ($Answer2 -eq 0) {
 
     # Performing the changes...
@@ -265,9 +268,6 @@ $DeleteOrig
 
 # Dump files to be deleted to a log file for possible use later.
 Write-Output ($DeleteOrig) | Out-File $mkvOriginals -Append
-
-# Function Question3
-Question3
 
 If ($Answer3 -eq 0) {
     
