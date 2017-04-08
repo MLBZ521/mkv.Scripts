@@ -2,7 +2,7 @@
 
 Script Name:  auto_mkvmerge.ps1
 By:  Zack Thompson / Created:  3/19/2017
-Version: 0.8.1 / Updated:  4/7/2017 / By:  ZT
+Version: 0.9.3 / Updated:  4/8/2017 / By:  ZT
 
 Description:  This script will allow for batch processing of files with the mkvmerge.exe toolset.
 
@@ -17,7 +17,7 @@ To do:
  Done = Output original track list to CSV log
  Done = If you don't want to delete the files upon completion, dump file list to file for use later
  Done = Add option to delete files in this dump file
- + Get file size information to compare before and after disk savings.
+ Done = Get file size information to compare before and after disk savings.
  + Adjust script to take values as arguments, or convert script to a function.
 
 #>
@@ -70,7 +70,6 @@ Function Question3 {
 # ============================================================
 
 $LineFeed = [char]0x000A
-$Delete = '!'
 
 # Declare Arrays
 $mkvInfoResults = @()
@@ -87,7 +86,7 @@ $Trims.'Language: ' = ''
 $Trims."$($LineFeed)" = ','
 
 # Define location to the new destination for PST Files
-$Destination = "$($env:SystemDrive)\ScriptLogs\"
+$Destination = "$($env:SystemDrive)\ScriptLogs\auto_mkvmerge\"
 
 # Set LogFile locations and names
 $LogFile = $Destination + "Log_auto_mkvmerge.txt"
@@ -132,7 +131,7 @@ $Location = Read-Host
 
 
 # Get all mkvs info from provided location
-$mkvs = Get-ChildItem -Filter *.mkv -Path $Location -Recurse | Select Name, Directory, FullName
+$mkvs = Get-ChildItem -Filter *.mkv -Path $Location -Recurse | Select Name, Directory, FullName, Length
 
 ForEach ($mkv in $mkvs) {
 
@@ -149,6 +148,9 @@ ForEach ($mkv in $mkvs) {
     $mkvInfoResults = $mkvInfo -split '!'
     $mkvInfoResults = $mkvInfoResults | Where-Object { $_ }
 
+    # Get size of the file
+    $mkvSize = "$([Math]::Round($mkv.Length / 1GB, 2))GB"
+
     # Put data into a hash table that will be imported into a custom object.
     ForEach ($mkvResult in $mkvInfoResults) {
  
@@ -161,6 +163,8 @@ ForEach ($mkv in $mkvs) {
             Track = $mkvData[0].TrimEnd()
             Type = $mkvData[1].TrimEnd()
             Language = $mkvData[2].TrimEnd()
+            Size = $mkvSize
+            Length = $mkv.Length
             Directory = $mkv.Directory
         }
 
@@ -169,6 +173,7 @@ ForEach ($mkv in $mkvs) {
 
     }
 }
+
 
 # Display results to screen for review
 Write-Host "All tracks for provided files, please review before continuing..." -ForegroundColor Cyan
@@ -179,7 +184,7 @@ Write-Output "All tracks found in scan:" | Out-File $LogFile -Append
 Write-Output ($mkvObject | Select-Object Track, Type, Language, Name |  FT) | Out-File $LogFile -Append
 
 # Dump original results with full track list to a CSV file for review.
-($mkvObject | Select-Object Track, Type, Language, Name, Directory) | Export-Csv $mkvReport -Append
+($mkvObject | Select-Object Track, Type, Language, Name, Size, Directory) | Export-Csv $mkvReport -Append
 
 # Function Question1
 Question1
@@ -188,6 +193,7 @@ If ($Answer1 -eq 0) {
 
     # Define array
     $mkvRemove = @()
+    $mkvSizeOrig = @()
 
     # Here I grab the languages I want to remove.
     ForEach ($mkvEdit in $mkvObject) {
@@ -213,7 +219,11 @@ If ($Answer1 -eq 0) {
         Write-Output "The following number of tracks were found per file.  These tracks will be removed:" | Out-File $LogFile -Append
         Write-Output ($mkvItems | Select-Object Count, Name | FT -AutoSize) | Out-File $LogFile -Append
 
+        $mkvSizeOrig += ($mkvItems.Group | Select-Object Length -Unique)
+
     }
+        
+    $mkvSizeOrigTotalGB = "$([Math]::Round(($mkvSizeOrig | Measure-Object -Sum Length).Sum / 1GB, 2))GB"
 }
 
 # Function Question2
@@ -230,25 +240,36 @@ If ($Answer2 -eq 0) {
 
     # Define Array
     $DeleteOrig = @()
+    $mkvSizeNew = @()
 
     ForEach ($mkvItem in $mkvItems) {
+    
+        $mkvAudiosRemove = $null
+        $DeleteAudios = $null
+        $mkvSubtitlesRemove = $null
+        $DeleteSubtitles = $null
 
-        # Get all the audio tracks to be removed, and deliminate the with commas.
-        $mkvVideos = ($mkvItem.Group | Where-Object { $_.Type -eq "video" } | Select-Object -ExpandProperty Track) -join ','
-        
-        # Get all the audio tracks to be removed, and deliminate the with commas.
+        # Get all the audio tracks to be removed, and deliminate them with commas.
         $mkvAudios = ($mkvItem.Group | Where-Object { $_.Type -eq "audio" } | Select-Object -ExpandProperty Track) -join ','
-
-        # Get all the subtitle tracks to be removed, and deliminate the with commas.
-        $mkvSubtitles = ($mkvItem.Group | Where-Object { $_.Type -eq "subtitles" } | Select-Object -ExpandProperty Track) -join ','
+        If ($mkvAudios -gt 0)  {
+            $mkvAudiosRemove = "--audio-tracks"
+            $DeleteAudios = '!'
+        }
+        
+        # Get all the subtitle tracks to be removed, and deliminate them with commas.
+        $mkvSubtitles = $($mkvItem.Group | Where-Object { $_.Type -eq "subtitles" } | Select-Object -ExpandProperty Track) -join ','
+        If ($mkvSubtitles -gt 0)  {
+            $mkvSubtitlesRemove = "--subtitle-tracks"
+            $DeleteSubtitles = '!'
+        }
 
         # Define Input and Output file names.
         $InputFile = "$($mkvItem.Group | Select-Object Directory -Unique -ExpandProperty Directory)\$($mkvItem.Name)"
         $OutputFile = "$($mkvItem.Group | Select-Object Directory -Unique -ExpandProperty Directory)\new_$($mkvItem.Name)"
 
         # Perform mkvmerge on file.
-#        Write-Host "mkvmerge.exe --output $OutputFile --audio-tracks $($Delete)$($mkvAudios) --subtitle-tracks $($Delete)$($mkvSubtitles) $InputFile"   # This is for development.
-        mkvmerge.exe --output $OutputFile --audio-tracks "$($Delete)$($mkvAudios)" --subtitle-tracks "$($Delete)$($mkvSubtitles)" $InputFile
+#        Write-Host "mkvmerge.exe "--output" $OutputFile $mkvAudiosRemove "$($DeleteAudios)$($mkvAudios)" $mkvSubtitlesRemove "$($DeleteSubtitles)$($mkvSubtitles)" $InputFile"   # This is for development.
+        mkvmerge.exe "--output" $OutputFile $mkvAudiosRemove "$($DeleteAudios)$($mkvAudios)" $mkvSubtitlesRemove "$($DeleteSubtitles)$($mkvSubtitles)" $InputFile
 
         # Perform mkvpropedit on file (delete title and set video track to eng).
 #        Write-Host "mkvpropedit.exe $OutputFile --delete title --edit track:1 --set language=eng"   # This is for development.
@@ -260,7 +281,21 @@ If ($Answer2 -eq 0) {
 
         # Rename 'new' as 'production.'
         Rename-Item $OutputFile -NewName $InputFile
+
+        $mkvSizeNew += Get-ChildItem -Path $InputFile | Select Length
+
     }
+
+    $mkvSizeNewTotalGB = "$([Math]::Round(($mkvSizeNew | Measure-Object -Sum Length).Sum / 1GB, 2))GB"
+    $TotalSaved = "$([Math]::Round(($mkvSizeOrigTotalGB - $mkvSizeNewTotalGB) / 1GB, 2))GB"
+
+    Write-Host "Total original size of files modified:  $mkvSizeOrigTotalGB" -ForegroundColor Magenta
+    Write-Host "Total new size of files modified:  $mkvSizeNewTotalGB" -ForegroundColor Yellow
+    Write-Host "Size saved:  $TotalSaved" -ForegroundColor Green
+    
+    Write-Output "Total original size of files modified:  $mkvSizeOrigTotalGB" | Out-File $LogFile -append
+    Write-Output "Total new size of files modified:  $mkvSizeNewTotalGB" | Out-File $LogFile -append
+    Write-Output "Size saved:  $TotalSaved" | Out-File $LogFile -append
 }
 
 Write-Host "Here are the original files, do you want to nuke these?" -ForegroundColor Red
