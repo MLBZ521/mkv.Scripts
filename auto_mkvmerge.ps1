@@ -2,9 +2,11 @@
 
 Script Name:  auto_mkvmerge.ps1
 By:  Zack Thompson / Created:  3/19/2017
-Version: 0.7 / Updated:  3/26/2017 / By:  ZT
+Version: 0.8 / Updated:  4/7/2017 / By:  ZT
 
 Description:  This script will allow for batch processing of files with the mkvmerge.exe toolset.
+
+Syntax:  To use this script, you would call it will the action you want to perform.
 
 Notes:
     * This script assumes the mkvmerge toolset directory is in your PATH enviroment variable.
@@ -14,8 +16,9 @@ To do:
  Done = Add logging capabilities
  Done = Output original track list to CSV log
  Done = If you don't want to delete the files upon completion, dump file list to file for use later
-    + Add option to delete files in this dump file
- + Adjust script to take values as arguments, or convert to a function.
+ Done = Add option to delete files in this dump file
+ + Get file size information to compare before and after disk savings.
+ + Adjust script to take values as arguments, or convert script to a function.
 
 #>
 
@@ -23,6 +26,16 @@ Write-Host "This script will allow for batch processing of files with the mkvmer
 
 # ============================================================
 # These functions are all questions asked during the processing of the script.
+
+Function Question0 {
+	$Title = "Choose action to perform";
+	$Message = "Do you want run mkvmerge or delete a batch of originals?  Enter ? for more information on the options."
+	$Run = New-Object System.Management.Automation.Host.ChoiceDescription "&Run mkvmerge","Run mkvmerge on a folder.";
+	$Batch = New-Object System.Management.Automation.Host.ChoiceDescription "&Batch delete","Delete a batch of original files from a prior log.";
+    $Options = [System.Management.Automation.Host.ChoiceDescription[]]($Run,$Batch);
+	$script:Answer0 = $Host.UI.PromptForChoice($Title,$Message,$Options,0)
+}
+
 Function Question1 {
 	$Title = "Do you want to continue?";
 	$Message = "Do you want to continue?  Enter ? for more information on the options."
@@ -81,13 +94,6 @@ $LogFile = $Destination + "Log_auto_mkvmerge.txt"
 $mkvOriginals = $Destination + "mkvOriginals.txt"
 $mkvReport = $Destination + "mkvReport.csv"
 
-Write-Host "You can find logs in the following location:  $($Destination)" -ForegroundColor Cyan
-
-# Request location of files to scan.
-Write-Host "Please provide location to scan for files:  " -ForegroundColor Yellow -NoNewline
-$Location = Read-Host
-#$Location = "M:\Library\TV\test"  # This is for development.
-
 # ============================================================
 # Script Body
 # ============================================================
@@ -99,6 +105,31 @@ if(!(Test-Path -Path $Destination)){
 
 # Write to log that script started to process.
 Write-Output "Script ran on $(Get-Date -UFormat "%m-%d-%Y %r")" | Out-File $LogFile -append
+
+# Function Question0
+Question0
+
+If ($Answer0 -eq 1) {
+    Write-Output "The option to batch delete original files was selected." | Out-File $LogFile -append
+    Write-Host "Please provide list of files to delete:  " -ForegroundColor Yellow -NoNewline
+    $OriginalsFile = Read-Host
+    $Originals = Get-Content $OriginalsFile
+
+    Write-Host "Deleteing original files..." -ForegroundColor DarkRed
+    ForEach ($Original in $Originals) {
+        Remove-Item -Path $Original
+    }
+
+    Write-Output "Script completed on $(Get-Date -UFormat "%m-%d-%Y %r")" | Out-File $LogFile -append
+    Write-Output "##################################################" | Out-File $LogFile -append
+    Exit
+}
+
+# Request location of files to scan.
+Write-Host "Please provide location to scan for files:  " -ForegroundColor Yellow -NoNewline
+$Location = Read-Host
+#$Location = "M:\Library\TV\test"  # This is for development.
+
 
 # Get all mkvs info from provided location
 $mkvs = Get-ChildItem -Filter *.mkv -Path $Location -Recurse | Select Name, Directory, FullName
@@ -221,7 +252,7 @@ If ($Answer2 -eq 0) {
         mkvpropedit.exe $OutputFile --delete title --edit track:1 --set language=eng
  
         # Label original as such.
-        Rename-Item $InputFile -NewName "orig_$($InputFile)"
+        Rename-Item $InputFile -NewName "$($mkvItem.Group | Select-Object Directory -Unique -ExpandProperty Directory)\orig_$($mkvItem.Name)"
         $DeleteOrig += "$($mkvItem.Group | Select-Object Directory -Unique -ExpandProperty Directory)\orig_$($mkvItem.Name)"
 
         # Rename 'new' as 'production.'
@@ -239,10 +270,15 @@ Write-Output ($DeleteOrig) | Out-File $mkvOriginals -Append
 Question3
 
 If ($Answer3 -eq 0) {
-
-#    $DeleteOrig | Remove-Item
+    
+    Write-Output "The option to delete original files was selected." | Out-File $LogFile -append
+    Write-Host "Deleteing original files..." -ForegroundColor DarkRed
+    $DeleteOrig | Remove-Item
 
 }
+
+Write-Host "Script complete!" -ForegroundColor Cyan
+Write-Host "You can find logs in the following location:  $($Destination)" -ForegroundColor Green
 
 Write-Output "Script completed on $(Get-Date -UFormat "%m-%d-%Y %r")" | Out-File $LogFile -append
 Write-Output "##################################################" | Out-File $LogFile -append
