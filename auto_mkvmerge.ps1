@@ -7,7 +7,7 @@ Version: 0.10 / Updated:  4/11/2017 / By:  ZT
 Description:  This script will allow for batch processing of files with the mkvmerge.exe toolset.
 
 Notes:
-    * This script assumes the mkvmerge toolset directory is in your PATH enviroment variable.
+    * At this time, this script assumes the mkvmerge toolset directory is in your PATH environment variable.
     * This script is 'working' as desired, but by no means is finished -- more to come.
 
 To do:
@@ -81,13 +81,13 @@ $Trims.'Track type: ' = ''
 $Trims.'Language: ' = ''
 $Trims."$($LineFeed)" = ','
 
-# Define location to the new destination for PST Files
+# Define location to save log files.
 $Destination = "$($env:SystemDrive)\ScriptLogs\auto_mkvmerge\"
 
 # Set LogFile locations and names
 $LogFile = $Destination + "Log_auto_mkvmerge.txt"
-$mkvOriginals = $Destination + "mkvOriginals.txt"
-$mkvReport = $Destination + "mkvReport.csv"
+$mkvOriginals = $Destination + "Log_mkvOriginals.txt"
+$mkvReport = $Destination + "Log_mkvReport.csv"
 
 # ============================================================
 # Script Body
