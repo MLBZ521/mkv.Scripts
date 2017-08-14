@@ -2,7 +2,7 @@
 
 Script Name:  auto_mkvmerge.ps1
 By:  Zack Thompson / Created:  3/19/2017
-Version: 0.10 / Updated:  4/11/2017 / By:  ZT
+Version: 0.11 / Updated:  8/13/2017 / By:  ZT
 
 Description:  This script will allow for batch processing of files with the mkvmerge.exe toolset.
 
@@ -11,11 +11,9 @@ Notes:
     * This script is 'working' as desired, but by no means is finished -- more to come.
 
 To do:
- Done = Sort files after Get-ChildItem to put in Alpha Numeric Order (just for aesthetics and ease of review).
- Done = Add a count to know how many files were found and current progress of the run.
- Done = Account for files that only the video file is listed as an 'unwanted' language -- so mkvmerge is not run against this file.
- Done = Account for files that only have 'unwanted' audio languages -- so we don't remove the only audio language.
- + Will try to add a way to select tracks based on their 'name', for groups files, to remove those tracks across files.
+ + I need to GET the video track number, not assume it is zero, this may not always be the case -- see line 222.
+ + Prompt for expected file type (currently coded for .mkv, but other file types can be modifed by mkv toolset).
+ + Will try to add a way to select tracks based on their 'name', as a way to remove a common track from groups files.
  + Adjust script to take values as arguments, or convert script to a function.
 
 #>
@@ -67,9 +65,12 @@ Function Question3 {
 
 $LineFeed = [char]0x000A
 
-# Declare Arrays
+# Create Arrays
 $mkvInfoResults = @()
 $mkvObject = @()
+
+# Create Hash Table
+$mkvProperties = @{}
 
 # Define text that needs be trimmed from the output of mkvinfo.exe.
 $Trims = @{}
@@ -141,7 +142,7 @@ Write-Output "Number of files found in the scan:  $($mkvs.Count)" | Out-File $Lo
 ForEach ($mkv in $mkvs) {
 
     # Get data from mkvs with mkvinfo.exe.
-    $mkvInfo = cmd /c mkvinfo.exe $mkv.FullName | Where-Object -FilterScript { ($_ -like '*Track number*') -or ($_ -like '*Track type*') -or ($_ -like '*Language*') -and ($_ -notlike '*Chapter*') } | Out-String
+    $mkvInfo = cmd /c mkvinfo.exe $mkv.FullName | Where-Object -FilterScript { ($_ -like '*Track number*') -or ($_ -like '*Track type*') -or ($_ -like '*Language*') -and ($_ -notlike '*Chapter*') -and ($_ -notlike '*Writing application*') } | Out-String
 #    $mkvInfo = cmd /c mkvinfo.exe $mkv.FullName | Where-Object -FilterScript { ($_ -like '*Track number*') -or ($_ -like '*Track type*') -or ($_ -like '*Language*')  -or ($_ -like '*Name*') -and ($_ -notlike '*Chapter*') } | Out-String  # Possible new feature
 
     # Trim the data to a more usable format.
@@ -217,6 +218,9 @@ If ($Answer1 -eq 0) {
             $mkvObject2 += $mkvCheck.Group
         }
     }
+
+
+#########################  Below, I need to GET the video track number, not assume it is zero, this may not always be the case.
 
     # Here I grab the languages I want to remove.
     ForEach ($mkvEdit in $mkvObject2) {
