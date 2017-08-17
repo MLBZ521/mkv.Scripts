@@ -2,7 +2,7 @@
 
 Script Name:  auto_mkvmerge.ps1
 By:  Zack Thompson / Created:  3/19/2017
-Version: 0.11 / Updated:  8/13/2017 / By:  ZT
+Version: 0.12 / Updated:  8/16/2017 / By:  ZT
 
 Description:  This script will allow for batch processing of files with the mkvmerge.exe toolset.
 
@@ -11,8 +11,8 @@ Notes:
     * This script is 'working' as desired, but by no means is finished -- more to come.
 
 To do:
- + I need to GET the video track number, not assume it is zero, this may not always be the case -- see line 222.
- + Prompt for expected file type (currently coded for .mkv, but other file types can be modifed by mkv toolset).
+ DONE = I need to GET the video track number, not assume it is zero, this may not always be the case -- see line 222.
+ DONEish = Prompt for expected file type (currently coded for .mkv, but other file types can be modifed by mkv toolset).
  + Will try to add a way to select tracks based on their 'name', as a way to remove a common track from groups files.
  + Adjust script to take values as arguments, or convert script to a function.
 
@@ -72,6 +72,11 @@ $mkvObject = @()
 # Create Hash Table
 $mkvProperties = @{}
 
+# Define the File Extensions we're looking for
+$fileExtensions = @()
+$fileExtensions += "*.mkv"
+$fileExtensions += "*.mp4"
+
 # Define text that needs be trimmed from the output of mkvinfo.exe.
 $Trims = @{}
 $Trims.'|  + ' = ''
@@ -95,7 +100,7 @@ $mkvReport = $Destination + "Log_mkvReport.csv"
 # ============================================================
 
 # Check to see directory exists and create it if not.
-if(!(Test-Path -Path $Destination)){
+If (!(Test-Path -Path $Destination)) {
     New-Item -ItemType directory -Path $Destination
 }
 
@@ -130,7 +135,7 @@ $Location = Read-Host
 #$Location = "M:\Library\TV\test"  # This is for development.
 
 # Get all mkvs info from provided location
-$mkvs = Get-ChildItem -Filter *.mkv -Path $Location -Recurse | Select Name, Directory, FullName, Length
+$mkvs = Get-ChildItem -Path "$($Location)\*" -Include $fileExtensions -Recurse | Select Name, Directory, FullName, Length
 
 # Sort the list by name.
 $mkvs = $mkvs | Sort-Object Name
@@ -219,14 +224,11 @@ If ($Answer1 -eq 0) {
         }
     }
 
-
-#########################  Below, I need to GET the video track number, not assume it is zero, this may not always be the case.
-
     # Here I grab the languages I want to remove.
     ForEach ($mkvEdit in $mkvObject2) {
 
         # I don't want to include track 0, aka the Video track.
-        If ($mkvEdit.Track -ne 0) {
+        If ($mkvEdit.Type -ne "video") {
             
             # In the future, I want to adjust this to where I can input the languages I want to find.
             If (($mkvEdit.Language -ne "eng") -and ($mkvEdit.Language -ne "")) {
@@ -247,18 +249,27 @@ If ($Answer1 -eq 0) {
         Exit
     }
     Else {
-        Write-Host "The following number of tracks were found per file.  These tracks will be removed:" -ForegroundColor Cyan
+        Write-Host "The following number of tracks were found per file:" -ForegroundColor Cyan
         $mkvItems | Select-Object Count, Name | FT -AutoSize
+        
+        Write-Host "These tracks will be removed:" -ForegroundColor Cyan
+        $mkvItems.Group | Select-Object Track, Type, Language, Name | FT -AutoSize
+
         Write-Host "(Last point to turn back!)" -ForegroundColor Red
 
         # Dump results to Log File
-        Write-Output "The following number of tracks were found per file.  These tracks will be removed:" | Out-File $LogFile -Append
+        Write-Output "The following number of tracks were found per file:" | Out-File $LogFile -Append
         Write-Output ($mkvItems | Select-Object Count, Name | FT -AutoSize) | Out-File $LogFile -Append
 
+        Write-Output "These tracks will be removed:" | Out-File $LogFile -Append
+        Write-Output ($mkvItems.Group | Select-Object Track, Type, Language, Name | FT -AutoSize) | Out-File $LogFile -Append
+
+        # Add each file's original file size to an array.
         $mkvSizeOrig += ($mkvItems.Group | Select-Object Length -Unique)
 
     }
-        
+    
+    # Add all orginal file sizes together, convert to gigabytes.
     $mkvSizeOrigTotalGB = "$([Math]::Round(($mkvSizeOrig | Measure-Object -Sum Length).Sum / 1GB, 2))GB"
 }
 
