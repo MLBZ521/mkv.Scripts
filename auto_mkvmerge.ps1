@@ -2,7 +2,7 @@
 
 Script Name:  auto_mkvmerge.ps1
 By:  Zack Thompson / Created:  3/19/2017
-Version: 0.12 / Updated:  8/16/2017 / By:  ZT
+Version: 0.13 / Updated:  8/17/2017 / By:  ZT
 
 Description:  This script will allow for batch processing of files with the mkvmerge.exe toolset.
 
@@ -11,8 +11,7 @@ Notes:
     * This script is 'working' as desired, but by no means is finished -- more to come.
 
 To do:
- DONE = I need to GET the video track number, not assume it is zero, this may not always be the case -- see line 222.
- DONEish = Prompt for expected file type (currently coded for .mkv, but other file types can be modifed by mkv toolset).
+ DONE = Changed the languages check to an array that is looped through; may expand on this later to prompt for additional language.
  + Will try to add a way to select tracks based on their 'name', as a way to remove a common track from groups files.
  + Adjust script to take values as arguments, or convert script to a function.
 
@@ -76,6 +75,11 @@ $mkvProperties = @{}
 $fileExtensions = @()
 $fileExtensions += "*.mkv"
 $fileExtensions += "*.mp4"
+
+# Define the Track Languages we're looking to keep
+$trackLanguages = @()
+$trackLanguages += "eng"
+$trackLanguages += ""
 
 # Define text that needs be trimmed from the output of mkvinfo.exe.
 $Trims = @{}
@@ -227,12 +231,15 @@ If ($Answer1 -eq 0) {
     # Here I grab the languages I want to remove.
     ForEach ($mkvEdit in $mkvObject2) {
 
-        # I don't want to include track 0, aka the Video track.
+        # I don't want to include the Video track.
         If ($mkvEdit.Type -ne "video") {
             
-            # In the future, I want to adjust this to where I can input the languages I want to find.
-            If (($mkvEdit.Language -ne "eng") -and ($mkvEdit.Language -ne "")) {
-                $mkvRemove += $mkvEdit
+            # Check if the language is what I want to keep
+            ForEach ($trackLanguage in $trackLanguages) {
+
+                If (($mkvEdit.Language -ne $trackLanguage)) {
+                    $mkvRemove += $mkvEdit
+                }
             }
         }
     }
